@@ -1,0 +1,14 @@
+name: ssh-keyctl
+about: Helper tool to manage unique ssh keys for each host
+
+settings:
+  - ArgRequiredElseHelp
+
+subcommands:
+  - init:
+      settings:
+        - ArgRequiredElseHelp
+      about: Initialize a new public key authentication with a host
+      args:
+        - destination:
+            help: The destination you want to connect to
