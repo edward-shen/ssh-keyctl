@@ -3,7 +3,6 @@ use cli::{KeyInit, KeyRevoke, Opts, SubCommands};
 use osshkeys::{cipher::Cipher, KeyPair};
 use std::fs::read_to_string;
 use std::fs::OpenOptions;
-use std::os::unix::fs::PermissionsExt;
 use std::{io::Write, process::Command};
 mod cli;
 
@@ -67,13 +66,18 @@ fn init(args: &KeyInit) -> Result<(), SshKeyCtlError> {
     }
     let mut priv_key_file = priv_key_file.write(true).open(&priv_key_path)?;
 
-    let mut perms = priv_key_file.metadata()?.permissions();
-    perms.set_mode(0o600);
-    priv_key_file.set_permissions(perms)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut perms = priv_key_file.metadata()?.permissions();
+        perms.set_mode(0o600);
+        priv_key_file.set_permissions(perms)?;
+    }
+
     priv_key_file.write(
         key_pair
             .serialize_openssh(
-                args.password.as_ref().map(String::as_bytes),
+                args.passphrase.as_ref().map(String::as_bytes),
                 Cipher::Aes256_Ctr,
             )?
             .as_bytes(),
@@ -124,6 +128,7 @@ fn revoke(args: &KeyRevoke) -> Result<(), SshKeyCtlError> {
         .args(&[
             target,
             "-C",
+            // todo: make gnu sed independent
             &format!("sed -i '/{}/d' .ssh/authorized_keys", key_data),
         ])
         .spawn()

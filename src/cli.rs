@@ -20,15 +20,15 @@ pub struct KeyInit {
     pub target: String,
     #[clap(short = "t", long = "type", default_value = "ed25519")]
     pub key_type: KeyType,
-    #[clap(short = "c", long = "comment")]
+    #[clap(short, long)]
     /// The comment for the SSH key. Generally, this should be
     /// `username@hostname` of the computer that generated the key.
     pub comment: Option<String>,
-    #[clap(short = "p", long = "port", default_value = "22")]
+    #[clap(short, default_value = "22")]
     pub port: u16,
-    #[clap(short = "P", long = "passphrase")]
-    pub password: Option<String>,
-    #[clap(short = "f", long = "--force")]
+    #[clap(short = "P", long)]
+    pub passphrase: Option<String>,
+    #[clap(short, long)]
     pub force: bool,
 }
 
@@ -39,7 +39,7 @@ impl From<KeyRenew> for KeyInit {
             key_type: key_renew.key_type,
             comment: key_renew.comment,
             port: key_renew.port,
-            password: key_renew.password,
+            passphrase: key_renew.password,
             force: key_renew.force,
         }
     }
@@ -49,8 +49,10 @@ impl From<KeyRenew> for KeyInit {
 pub struct KeyRevoke {
     pub target: String,
     pub identity_file_path: Option<String>,
-    #[clap(short = "p", long = "port", default_value = "22")]
+    #[clap(short, long, default_value = "22")]
     pub port: u16,
+    #[clap(short, long)]
+    pub delete_identity_file: bool,
 }
 
 impl From<KeyRenew> for KeyRevoke {
@@ -59,6 +61,7 @@ impl From<KeyRenew> for KeyRevoke {
             target: key_renew.target,
             identity_file_path: key_renew.identity_file_path,
             port: key_renew.port,
+            delete_identity_file: key_renew.delete_identity_file,
         }
     }
 }
@@ -68,15 +71,17 @@ pub struct KeyRenew {
     pub target: String,
     #[clap(short = "t", long = "type", default_value = "ed25519")]
     pub key_type: KeyType,
-    #[clap(short = "c", long = "comment")]
+    #[clap(short, long)]
     pub comment: Option<String>,
-    #[clap(short = "p", long = "port", default_value = "22")]
+    #[clap(short, long, default_value = "22")]
     pub port: u16,
-    #[clap(short = "P", long = "passphrase")]
+    #[clap(short = "P", long)]
     pub password: Option<String>,
-    #[clap(short = "f", long = "--force")]
+    #[clap(short, long)]
     pub force: bool,
     pub identity_file_path: Option<String>,
+    #[clap(short, long)]
+    pub delete_identity_file: bool,
 }
 
 #[derive(Debug, Clone)]
