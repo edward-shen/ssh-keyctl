@@ -120,7 +120,6 @@ fn revoke(args: &KeyRevoke) -> Result<(), SshKeyCtlError> {
     key_file_path.push(format!("{}.pub", key_file_name));
     let key_data = read_to_string(key_file_path).unwrap();
     let key_data = key_data.trim().replace("/", "\\/");
-    println!("{:?}", &key_data);
     Command::new("ssh")
         .args(&[
             target,
