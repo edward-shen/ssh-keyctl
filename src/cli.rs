@@ -1,6 +1,14 @@
 use clap::Clap;
 use osshkeys::keys::KeyType as OsshKeyType;
 
+/// A helper to manage unique SSH keys.
+///
+/// ssh-keyctl is a tool that helps manage unique SSH keys for every host. It
+/// offers a simple way to initialize, revoke, and renew SSH keys. ssh-keyctl
+/// is completely stateless, so modifications to your .ssh folder should not
+/// affect how ssh-keyctl functions. It works on a fail-safe basis, and thus
+/// requires users to explicitly indicate when they wish to perform destructive
+/// tasks, such as overwritting files or deleting them.
 #[derive(Clap, Clone)]
 #[clap(author, version)]
 pub struct Opts {
@@ -15,20 +23,39 @@ pub enum SubCommands {
     Renew(KeyRenew),
 }
 
+/// Generate and add a new key to the user's authorized_keys on the remote host.
+///
+/// Given a target, it generates a new keypair with the filename as the name
+/// of the remote host. ed25519 is used by default as the key type, as most
+/// implementations should support it by now, is smaller, and offers the same or
+/// more crypographic integrity than RSA. By default, a long flag is required to
+/// overwrite an existing key that exists with the same name as the remote host.
 #[derive(Clap, Clone)]
 pub struct KeyInit {
+    /// The target to generate a keypair to. This follows the form [username@]host.
     pub target: String,
+
+    /// Which type of key to use. RSA is well supported, while ed25519 is the most recent.
     #[clap(short = "t", long = "type", default_value = "ed25519")]
     pub key_type: KeyType,
-    #[clap(short, long)]
+
     /// The comment for the SSH key. Generally, this should be
     /// `username@hostname` of the computer that generated the key.
+    #[clap(short, long)]
     pub comment: Option<String>,
+
+    /// What port the SSH server is listening to.
     #[clap(short, default_value = "22")]
     pub port: u16,
+
+    /// Set an optional password on your SSH key.
     #[clap(short = "P", long)]
     pub passphrase: Option<String>,
-    #[clap(short, long)]
+
+    /// Overwrite an existing private and public keypair. This is dangerous
+    /// and can leave you without access to the remote host. Use only if you
+    /// know what you're doing!
+    #[clap(long = "overwrite-ssh-keys")]
     pub force: bool,
 }
 
@@ -45,13 +72,27 @@ impl From<KeyRenew> for KeyInit {
     }
 }
 
+/// Delete a public key from the user's authorized_keys on the remote host.
+///
+/// Sends a SSH command using the provided identity file to remove the public
+/// key portion of the provided identity file from the authorized_keys for the
+/// specified user on the remote host.
 #[derive(Clap, Clone)]
 pub struct KeyRevoke {
+    /// The target to generate a keypair to. This follows the form [username@]host.
     pub target: String,
+
+    /// The name of the public key file to revoke, without the .pub file
+    /// extension. If not is provided, the hostname is used as default.
     pub identity_file_path: Option<String>,
-    #[clap(short, long, default_value = "22")]
+
+    /// What port the SSH server is listening to.
+    #[clap(short, default_value = "22")]
     pub port: u16,
-    #[clap(short, long)]
+
+    /// Delete the identity file after revocation. Set to false by default as a
+    /// pre-emptive safety measure.
+    #[clap(long)]
     pub delete_identity_file: bool,
 }
 
@@ -66,21 +107,42 @@ impl From<KeyRenew> for KeyRevoke {
     }
 }
 
+/// Shortcut for both revoke and then renew a SSH key.
 #[derive(Clap, Clone)]
 pub struct KeyRenew {
+    /// The target to generate a keypair to. This follows the form [username@]host.
     pub target: String,
+
+    /// Which type of key to use. RSA is well supported, while ed25519 is the most recent.
     #[clap(short = "t", long = "type", default_value = "ed25519")]
     pub key_type: KeyType,
+
+    /// The comment for the SSH key. Generally, this should be
+    /// `username@hostname` of the computer that generated the key.
     #[clap(short, long)]
     pub comment: Option<String>,
+
+    /// What port the SSH server is listening to.
     #[clap(short, long, default_value = "22")]
     pub port: u16,
+
+    /// Set an optional password on your SSH key.
     #[clap(short = "P", long)]
     pub password: Option<String>,
-    #[clap(short, long)]
+
+    /// Overwrite an existing private and public keypair. This is dangerous
+    /// and can leave you without access to the remote host. Use only if you
+    /// know what you're doing!
+    #[clap(long = "overwrite-ssh-keys")]
     pub force: bool,
+
+    /// The name of the public key file to revoke, without the .pub file
+    /// extension. If not is provided, the hostname is used as default.
     pub identity_file_path: Option<String>,
-    #[clap(short, long)]
+
+    /// Delete the identity file after revocation. Set to false by default as a
+    /// pre-emptive safety measure.
+    #[clap(long)]
     pub delete_identity_file: bool,
 }
 
