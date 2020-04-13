@@ -1,9 +1,8 @@
 use clap::derive::Clap;
 use cli::{KeyInit, KeyRevoke, Opts, SubCommands};
 use osshkeys::{cipher::Cipher, KeyPair};
-use std::fs::read_to_string;
-use std::fs::{remove_file, OpenOptions};
-use std::{io::Write, process::Command};
+use std::fs::{read_to_string, remove_file, OpenOptions};
+use std::{io::Write, path::Path, process::Command};
 mod cli;
 
 #[derive(Debug)]
@@ -24,9 +23,7 @@ impl From<std::io::Error> for SshKeyCtlError {
 }
 
 fn main() -> Result<(), SshKeyCtlError> {
-    let opts = Opts::parse();
-
-    match opts.subcmd {
+    match Opts::parse().subcmd {
         SubCommands::Init(args) => init(&args)?,
         SubCommands::Revoke(args) => revoke(&args)?,
         SubCommands::Renew(args) => {
@@ -49,59 +46,65 @@ fn init(args: &KeyInit) -> Result<(), SshKeyCtlError> {
         [_, target] => target,
         _ => panic!(":("),
     };
+
     let mut priv_key_path = ssh_folder.clone();
     priv_key_path.push(target);
-    let mut pub_key_path = priv_key_path.clone();
-    pub_key_path.set_file_name(format!("{}.pub", target));
-
-    [&priv_key_path, &pub_key_path].iter().for_each(|path| {
-        if !args.force && path.as_path().exists() {
-            panic!("aa");
-        }
-    });
-
-    let mut priv_key_file = OpenOptions::new();
-    if !args.force {
-        priv_key_file.create_new(true);
-    }
-    let mut priv_key_file = priv_key_file.write(true).open(&priv_key_path)?;
-
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let mut perms = priv_key_file.metadata()?.permissions();
-        perms.set_mode(0o600);
-        priv_key_file.set_permissions(perms)?;
-    }
-
-    priv_key_file.write(
+    safely_write(
+        priv_key_path.as_path(),
         key_pair
             .serialize_openssh(
                 args.passphrase.as_ref().map(String::as_bytes),
                 Cipher::Aes256_Ctr,
             )?
             .as_bytes(),
+        true,
+        args.force,
     )?;
 
-    let mut pub_key_file = OpenOptions::new();
-    if !args.force {
-        pub_key_file.create_new(true);
-    }
-    let mut pub_key_file = pub_key_file.write(true).open(pub_key_path)?;
-
-    pub_key_file.write(key_pair.serialize_publickey()?.as_bytes())?;
-    pub_key_file.write("\n".as_bytes())?;
-
-    Command::new("ssh-copy-id")
-        .arg("-i")
-        .arg(priv_key_path)
-        .arg("-p")
-        .arg(args.port.to_string())
-        .arg(&args.target)
-        .spawn()?
-        .wait()?;
+    let mut pub_key_path = priv_key_path.clone();
+    pub_key_path.set_file_name(format!("{}.pub", target));
+    let pub_key_data = key_pair.serialize_publickey()?;
+    let mut pub_key_data = pub_key_data.as_bytes().to_vec();
+    pub_key_data.push('\n' as u8);
+    safely_write(pub_key_path.as_path(), &pub_key_data, false, args.force)?;
 
     // todo: edit .ssh/config file
+    Ok(())
+}
+
+/// Safely writes to a path, requiring a force flag to overwrite it. If the
+/// private flag is true and the target operating system is Unix, then also sets
+/// the file to read/write only to the owner of the file. On other operating
+/// systems, does nothing. since they likely can't support the permissions that
+/// SSH prefers.
+fn safely_write(
+    path: &Path,
+    buffer: &[u8],
+    is_private: bool,
+    force: bool,
+) -> Result<(), SshKeyCtlError> {
+    if !force && path.exists() {
+        panic!("file already exists");
+    }
+
+    let mut priv_key_file = OpenOptions::new();
+    if !force {
+        priv_key_file.create_new(true);
+    }
+    let mut priv_key_file = priv_key_file.write(true).open(path)?;
+
+    #[cfg(unix)]
+    {
+        if is_private {
+            use std::os::unix::fs::PermissionsExt;
+            let mut perms = priv_key_file.metadata()?.permissions();
+            perms.set_mode(0o600);
+            priv_key_file.set_permissions(perms)?;
+        }
+    }
+
+    priv_key_file.write(buffer)?;
+
     Ok(())
 }
 
