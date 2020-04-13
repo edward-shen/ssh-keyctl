@@ -2,7 +2,7 @@ use clap::derive::Clap;
 use cli::{KeyInit, KeyRevoke, Opts, SubCommands};
 use osshkeys::{cipher::Cipher, KeyPair};
 use std::fs::read_to_string;
-use std::fs::OpenOptions;
+use std::fs::{remove_file, OpenOptions};
 use std::{io::Write, process::Command};
 mod cli;
 
@@ -38,7 +38,7 @@ fn main() -> Result<(), SshKeyCtlError> {
 }
 
 fn init(args: &KeyInit) -> Result<(), SshKeyCtlError> {
-    let mut key_pair = KeyPair::generate(args.key_type.0, 0).unwrap();
+    let mut key_pair = KeyPair::generate(args.key_type.0, 0)?;
     *key_pair.comment_mut() = args.comment.clone().unwrap();
     let mut ssh_folder = dirs::home_dir().unwrap();
     ssh_folder.push(".ssh");
@@ -98,10 +98,8 @@ fn init(args: &KeyInit) -> Result<(), SshKeyCtlError> {
         .arg("-p")
         .arg(args.port.to_string())
         .arg(&args.target)
-        .spawn()
-        .unwrap()
-        .wait()
-        .unwrap();
+        .spawn()?
+        .wait()?;
 
     // todo: edit .ssh/config file
     Ok(())
@@ -122,7 +120,7 @@ fn revoke(args: &KeyRevoke) -> Result<(), SshKeyCtlError> {
         Some(path) => path,
     };
     key_file_path.push(format!("{}.pub", key_file_name));
-    let key_data = read_to_string(key_file_path).unwrap();
+    let key_data = read_to_string(&key_file_path)?;
     let key_data = key_data.trim().replace("/", "\\/");
     Command::new("ssh")
         .args(&[
@@ -131,9 +129,13 @@ fn revoke(args: &KeyRevoke) -> Result<(), SshKeyCtlError> {
             // todo: make gnu sed independent
             &format!("sed -i '/{}/d' .ssh/authorized_keys", key_data),
         ])
-        .spawn()
-        .unwrap()
-        .wait()
-        .unwrap();
+        .spawn()?
+        .wait()?;
+
+    if args.delete_identity_file {
+        remove_file(&key_file_path)?;
+        key_file_path.set_extension("");
+        remove_file(&key_file_path)?;
+    }
     Ok(())
 }
